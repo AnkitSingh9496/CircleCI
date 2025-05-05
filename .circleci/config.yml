@@ -1,0 +1,20 @@
+version: 2.1
+
+executors:
+  docker-executor:
+    docker:
+      - image: cimg/base:stable
+
+jobs:
+  build:
+    executor: docker-executor
+    steps:
+      - checkout
+
+      - setup_remote_docker:
+          docker_layer_caching: true
+
+      - run:
+          name: Build Docker Image
+          command: |
+            docker build -t hello-world-express .
