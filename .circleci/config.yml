@@ -18,3 +18,16 @@ jobs:
           name: Build Docker Image
           command: |
             docker build -t hello-world-express .
+
+  runner-test:
+    machine: true
+    resource_class: virus/windows
+    steps:
+      - run: echo "Hi I'm on Runners!"
+
+workflows:
+  version: 2
+  testing:
+    jobs:
+      - build
+      - runner-test
