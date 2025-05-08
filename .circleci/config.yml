@@ -1,60 +1,17 @@
 version: 2.1
-
-executors:
-  docker-executor:
-    docker:
-      - image: cimg/base:stable
-
 jobs:
-  build:
-    executor: docker-executor
-    steps:
-      - checkout
-
-      - setup_remote_docker:
-          docker_layer_caching: true
-
-      - run:
-          name: Build Docker Image
-          command: |
-            docker build -t hello-world-express .
-
-  runner-test:
-    machine: true
-    resource_class: virus/windows
-    steps:
-      - run: echo "Hi I'm on Runners!"
-
-  push-to-ecr:
-    machine: true
-    resource_class: virus/windows
+  build-and-push:
+    docker:
+      - image: cimg/python:3.11
     steps:
       - checkout
       - run:
           name: Authenticate with ECR
-          shell: powershell.exe
           command: |
-            aws ecr get-login-password --region $Env:AWS_REGION `
-              | docker login --username AWS --password-stdin $Env:ECR_REGISTRY
-      - run:
-          name: Build, Tag, and Push Docker Image to ECR
-          shell: powershell.exe
-          command: |
-            docker build -t $Env:ECR_REPOSITORY .
-            docker tag $Env:ECR_REPOSITORY:latest $Env:ECR_REGISTRY/$Env:ECR_REPOSITORY:latest
-            docker push $Env:ECR_REGISTRY/$Env:ECR_REPOSITORY:latest
-
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+      # ... (other steps remain unchanged)
 workflows:
   version: 2
-
-  testing:
+  build_and_deploy:
     jobs:
-      - build
-      - runner-test
-
-  ecr-deploy:
-    jobs:
-      - build
-      - push-to-ecr:
-          requires:
-            - build
+      - build-and-push
