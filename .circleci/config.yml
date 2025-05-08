@@ -1,39 +1,41 @@
 version: 2.1
 
 executors:
-  self-hosted-windows:
-    machine:
-      enabled: true
-    resource_class: virus/windows
+  docker-executor:
+    docker:
+      - image: cimg/base:stable
 
 jobs:
   build:
-    executor: self-hosted-windows
+    executor: docker-executor
     steps:
       - checkout
+
+      - setup_remote_docker:
+          docker_layer_caching: true
+
       - run:
           name: Build Docker Image
-          shell: powershell.exe
           command: |
             docker build -t hello-world-express .
 
   runner-test:
-    executor: self-hosted-windows
+    machine: true
+    resource_class: virus/windows
     steps:
-      - run:
-          name: Hello from Runner
-          shell: powershell.exe
-          command: echo "Hi I'm on Runners!"
+      - run: echo "Hi I'm on Runners!"
 
   push-to-ecr:
-    executor: self-hosted-windows
+    machine: true
+    resource_class: virus/windows
     steps:
       - checkout
       - run:
           name: Authenticate with ECR
           shell: powershell.exe
           command: |
-            aws ecr get-login-password --region $Env:AWS_REGION | docker login --username AWS --password-stdin $Env:ECR_REGISTRY
+            aws ecr get-login-password --region $Env:AWS_REGION `
+              | docker login --username AWS --password-stdin $Env:ECR_REGISTRY
       - run:
           name: Build, Tag, and Push Docker Image to ECR
           shell: powershell.exe
