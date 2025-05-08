@@ -1,46 +1,42 @@
 version: 2.1
 
 executors:
-  docker-executor:
-    docker:
-      - image: cimg/base:stable
+  linux-runner:
+    machine:
+      enabled: true
+    resource_class: virus/windows  # your self-hosted runner label
 
 jobs:
   build:
-    executor: docker-executor
+    executor: linux-runner
     steps:
       - checkout
-
-      - setup_remote_docker:
-          docker_layer_caching: true
-
       - run:
           name: Build Docker Image
           command: |
             docker build -t hello-world-express .
 
   runner-test:
-    machine: true
-    resource_class: virus/windows
+    executor: linux-runner
     steps:
-      - run: echo "Hi I'm on Runners!"
+      - run:
+          name: Say Hi from Self-hosted Runner
+          command: echo "Hi I'm on the self-hosted runner!"
 
   push-to-ecr:
-  machine: true
-  resource_class: virus/windows 
-  steps:
-    - checkout
-    - run:
-        name: Authenticate with ECR
-        command: |
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-    - run:
-        name: Build, Tag, and Push Docker Image to ECR
-        command: |
-          docker build -t $ECR_REPOSITORY .
-          docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
+    executor: linux-runner
+    steps:
+      - checkout
+      - run:
+          name: Authenticate with ECR
+          command: |
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+      - run:
+          name: Build, Tag, and Push Docker Image to ECR
+          command: |
+            docker build -t $ECR_REPOSITORY .
+            docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
 workflows:
   version: 2
