@@ -17,8 +17,9 @@ jobs:
       - checkout
       - run:
           name: Build Docker Image
+          shell: powershell.exe
           command: |
-            docker build -t hello-world-express .
+                docker build -t hello-world-express .
 
   runner-test:
     executor: self-hosted-windows
