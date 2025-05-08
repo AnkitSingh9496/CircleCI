@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows 
+    resource_class: virus/windows
 
 jobs:
   build:
@@ -21,9 +21,15 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Check AWS CLI and Docker Versions
+          command: |
+            aws --version
+            docker --version
+      - run:
           name: Authenticate with ECR
           command: |
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region $AWS_REGION | \
+              docker login --username AWS --password-stdin $ECR_REGISTRY
       - run:
           name: Build, Tag, and Push Docker Image to ECR
           command: |
@@ -34,16 +40,13 @@ jobs:
 workflows:
   version: 2
 
-  testing:
-    jobs:
-      - build
-
   ecr-deploy:
     jobs:
       - build
       - push-to-ecr:
           requires:
             - build
+
 
 # version: 2.1
 
