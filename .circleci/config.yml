@@ -1,14 +1,14 @@
 version: 2.1
 
 executors:
-  linux-runner:
+  linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows  # your self-hosted runner label
+    resource_class: virus/windows  
 
 jobs:
   build:
-    executor: linux-runner
+    executor: linux-self-hosted
     steps:
       - checkout
       - run:
@@ -17,20 +17,21 @@ jobs:
             docker build -t hello-world-express .
 
   runner-test:
-    executor: linux-runner
+    executor: linux-self-hosted
     steps:
       - run:
-          name: Say Hi from Self-hosted Runner
-          command: echo "Hi I'm on the self-hosted runner!"
+          name: Hello from Self-Hosted Runner
+          command: echo "Running on self-hosted runner!"
 
   push-to-ecr:
-    executor: linux-runner
+    executor: linux-self-hosted
     steps:
       - checkout
       - run:
           name: Authenticate with ECR
           command: |
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region $AWS_REGION | \
+            docker login --username AWS --password-stdin $ECR_REGISTRY
       - run:
           name: Build, Tag, and Push Docker Image to ECR
           command: |
