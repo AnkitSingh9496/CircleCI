@@ -16,13 +16,6 @@ jobs:
           command: |
             docker build -t hello-world-express .
 
-  runner-test:
-    executor: linux-self-hosted
-    steps:
-      - run:
-          name: Hello from Self-Hosted Runner
-          command: echo "Running on self-hosted runner!"
-
   push-to-ecr:
     executor: linux-self-hosted
     steps:
@@ -30,8 +23,7 @@ jobs:
       - run:
           name: Authenticate with ECR
           command: |
-            aws ecr get-login-password --region $AWS_REGION | \
-            docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
       - run:
           name: Build, Tag, and Push Docker Image to ECR
           command: |
@@ -45,7 +37,6 @@ workflows:
   testing:
     jobs:
       - build
-      - runner-test
 
   ecr-deploy:
     jobs:
@@ -53,3 +44,59 @@ workflows:
       - push-to-ecr:
           requires:
             - build
+
+# version: 2.1
+
+# executors:
+#   linux-self-hosted:
+#     machine:
+#       enabled: true
+#     resource_class: virus/windows 
+
+# jobs:
+#   build:
+#     executor: linux-self-hosted
+#     steps:
+#       - checkout
+#       - run:
+#           name: Build Docker Image
+#           command: |
+#             docker build -t hello-world-express .
+
+#   runner-test:
+#     executor: linux-self-hosted
+#     steps:
+#       - run:
+#           name: Hello from Self-Hosted Runner
+#           command: echo "Running on self-hosted runner!"
+
+#   push-to-ecr:
+#     executor: linux-self-hosted
+#     steps:
+#       - checkout
+#       - run:
+#           name: Authenticate with ECR
+#           command: |
+#             aws ecr get-login-password --region $AWS_REGION | \
+#             docker login --username AWS --password-stdin $ECR_REGISTRY
+#       - run:
+#           name: Build, Tag, and Push Docker Image to ECR
+#           command: |
+#             docker build -t $ECR_REPOSITORY .
+#             docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
+#             docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+# workflows:
+#   version: 2
+
+#   testing:
+#     jobs:
+#       - build
+#       - runner-test
+
+#   ecr-deploy:
+#     jobs:
+#       - build
+#       - push-to-ecr:
+#           requires:
+#             - build
