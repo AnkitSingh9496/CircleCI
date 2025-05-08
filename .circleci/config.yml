@@ -5,42 +5,44 @@ executors:
     docker:
       - image: cimg/base:stable
 
-  self-hosted-windows:
-    machine:
-      enabled: true
-    resource_class: virus/windows
-
 jobs:
   build:
-    executor: self-hosted-windows
+    executor: docker-executor
     steps:
       - checkout
+
+      - setup_remote_docker:
+          docker_layer_caching: true
+
       - run:
           name: Build Docker Image
-          shell: powershell.exe
           command: |
-                docker build -t hello-world-express .
+            docker build -t hello-world-express .
 
   runner-test:
-    executor: self-hosted-windows
+    machine: true
+    resource_class: virus/windows
     steps:
       - run: echo "Hi I'm on Runners!"
 
   push-to-ecr:
-    executor: self-hosted-windows
+    machine: true
+    resource_class: virus/windows
     steps:
       - checkout
       - run:
           name: Authenticate with ECR
+          shell: powershell.exe
           command: |
-            aws ecr get-login-password --region $AWS_REGION `
-              | docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region $Env:AWS_REGION `
+              | docker login --username AWS --password-stdin $Env:ECR_REGISTRY
       - run:
           name: Build, Tag, and Push Docker Image to ECR
+          shell: powershell.exe
           command: |
-            docker build -t $ECR_REPOSITORY .
-            docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
-            docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            docker build -t $Env:ECR_REPOSITORY .
+            docker tag $Env:ECR_REPOSITORY:latest $Env:ECR_REGISTRY/$Env:ECR_REPOSITORY:latest
+            docker push $Env:ECR_REGISTRY/$Env:ECR_REPOSITORY:latest
 
 workflows:
   version: 2
