@@ -26,23 +26,21 @@ jobs:
       - run: echo "Hi I'm on Runners!"
 
   push-to-ecr:
-    machine: true
-    resource_class: virus/windows
-    steps:
-      - checkout
-      - run:
-          name: Authenticate with ECR
-          shell: powershell.exe
-          command: |
-            aws ecr get-login-password --region $Env:AWS_REGION `
-              | docker login --username AWS --password-stdin $Env:ECR_REGISTRY
-      - run:
-          name: Build, Tag, and Push Docker Image to ECR
-          shell: powershell.exe
-          command: |
-            docker build -t $Env:ECR_REPOSITORY .
-            docker tag $Env:ECR_REPOSITORY:latest $Env:ECR_REGISTRY/$Env:ECR_REPOSITORY:latest
-            docker push $Env:ECR_REGISTRY/$Env:ECR_REPOSITORY:latest
+  machine: true
+  resource_class: virus/windows 
+  steps:
+    - checkout
+    - run:
+        name: Authenticate with ECR
+        command: |
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+    - run:
+        name: Build, Tag, and Push Docker Image to ECR
+        command: |
+          docker build -t $ECR_REPOSITORY .
+          docker tag $ECR_REPOSITORY:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
 
 workflows:
   version: 2
