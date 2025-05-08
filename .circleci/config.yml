@@ -5,36 +5,34 @@ executors:
     docker:
       - image: cimg/base:stable
 
+  self-hosted-windows:
+    machine:
+      enabled: true
+    resource_class: virus/windows
+
 jobs:
   build:
-    executor: docker-executor
+    executor: self-hosted-windows
     steps:
       - checkout
-
-      - setup_remote_docker:
-          docker_layer_caching: true
-
       - run:
           name: Build Docker Image
           command: |
             docker build -t hello-world-express .
 
   runner-test:
-    machine: true
-    resource_class: virus/windows
+    executor: self-hosted-windows
     steps:
       - run: echo "Hi I'm on Runners!"
 
   push-to-ecr:
-    docker:
-      - image: amazon/aws-cli
+    executor: self-hosted-windows
     steps:
-      - setup_remote_docker
       - checkout
       - run:
           name: Authenticate with ECR
           command: |
-            aws ecr get-login-password --region $AWS_REGION \
+            aws ecr get-login-password --region $AWS_REGION `
               | docker login --username AWS --password-stdin $ECR_REGISTRY
       - run:
           name: Build, Tag, and Push Docker Image to ECR
