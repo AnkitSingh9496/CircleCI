@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows  # You might need to adjust this if using Linux.
+    resource_class: virus/windows  # You may want to change this if you're using Linux.
 
 jobs:
   build:
@@ -46,10 +46,10 @@ jobs:
               VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
               curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
               chmod +x kubectl
-              # Install kubectl into $HOME/bin to avoid sudo
+              # Install kubectl into $HOME/bin
               mkdir -p $HOME/bin
               mv kubectl $HOME/bin/kubectl
-              echo "$HOME/bin" >> $BASH_ENV
+              echo "export PATH=$HOME/bin:$PATH" >> $BASH_ENV
             else
               echo "kubectl already installed"
             fi
