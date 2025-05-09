@@ -34,21 +34,16 @@ jobs:
             docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
             docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
             docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-      - persist_to_workspace:
-          root: .
-          paths:
-            - deployment.yaml
-            - service.yaml
 
   deploy-to-eks:
     executor: linux-self-hosted
     steps:
-      - attach_workspace:
-          at: .
+      - checkout
       - run:
-          name: Install kubectl (if missing)
+          name: Install kubectl if not available
           command: |
             if ! command -v kubectl &> /dev/null; then
+              echo "Installing kubectl..."
               curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
               chmod +x kubectl
               sudo mv kubectl /usr/local/bin/
@@ -63,6 +58,12 @@ jobs:
             IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
             echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
             source $BASH_ENV
+      - run:
+          name: Check Kubernetes manifests exist
+          command: |
+            ls -la
+            test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
+            test -f service.yaml || (echo "Error: service.yaml not found" && exit 1)
       - run:
           name: Deploy to EKS
           command: |
