@@ -39,15 +39,27 @@ jobs:
     executor: linux-self-hosted
     steps:
       - checkout
+      # - run:
+      #     name: Install kubectl if not available
+      #     command: |
+      #       if ! command -v kubectl &> /dev/null; then
+      #         echo "Installing kubectl..."
+      #         curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+      #         chmod +x kubectl
+      #         sudo mv kubectl /usr/local/bin/
+      #       fi
       - run:
-          name: Install kubectl if not available
-          command: |
-            if ! command -v kubectl &> /dev/null; then
-              echo "Installing kubectl..."
-              curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-              chmod +x kubectl
-              sudo mv kubectl /usr/local/bin/
-            fi
+        name: Install kubectl if not available
+        command: |
+          if ! command -v kubectl &> /dev/null; then
+                echo "Installing kubectl..."
+                VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
+                curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
+                chmod +x kubectl
+                sudo mv kubectl /usr/local/bin/kubectl
+          else
+                echo "kubectl already installed"
+          fi
       - run:
           name: Set up kubeconfig
           command: |
