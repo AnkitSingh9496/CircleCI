@@ -73,15 +73,15 @@ jobs:
       - run:
           name: Check Kubernetes manifests exist
           command: |
-            echo "Listing files in the Kubernetes folder"
-            ls -la kubernetes
-            test -f kubernetes/deployment.yaml || (echo "Error: kubernetes/deployment.yaml not found" && exit 1)
-            test -f kubernetes/service.yaml || (echo "Error: kubernetes/service.yaml not found" && exit 1)
+            echo "Checking for deployment.yaml and service.yaml in root"
+            ls -la
+            test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
+            test -f service.yaml || (echo "Error: service.yaml not found" && exit 1)
       - run:
           name: Deploy to EKS
           command: |
-            envsubst < kubernetes/deployment.yaml | kubectl apply -f -
-            kubectl apply -f kubernetes/service.yaml
+            envsubst < deployment.yaml | kubectl apply -f -
+            kubectl apply -f service.yaml
 
 workflows:
   version: 2
