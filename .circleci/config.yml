@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows
+    resource_class: virus/windows  # Note: Change this to correct resource class if needed.
 
 jobs:
   build:
@@ -30,7 +30,6 @@ jobs:
             IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
             echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
             source $BASH_ENV
-
             docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
             docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
             docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
@@ -39,27 +38,18 @@ jobs:
     executor: linux-self-hosted
     steps:
       - checkout
-      # - run:
-      #     name: Install kubectl if not available
-      #     command: |
-      #       if ! command -v kubectl &> /dev/null; then
-      #         echo "Installing kubectl..."
-      #         curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-      #         chmod +x kubectl
-      #         sudo mv kubectl /usr/local/bin/
-      #       fi
       - run:
-        name: Install kubectl if not available
-        command: |
-          if ! command -v kubectl &> /dev/null; then
-                echo "Installing kubectl..."
-                VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
-                curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
-                chmod +x kubectl
-                sudo mv kubectl /usr/local/bin/kubectl
-          else
-                echo "kubectl already installed"
-          fi
+          name: Install kubectl if not available
+          command: |
+            if ! command -v kubectl &> /dev/null; then
+              echo "Installing kubectl..."
+              VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
+              curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
+              chmod +x kubectl
+              sudo mv kubectl /usr/local/bin/kubectl
+            else
+              echo "kubectl already installed"
+            fi
       - run:
           name: Set up kubeconfig
           command: |
@@ -93,6 +83,7 @@ workflows:
       - deploy-to-eks:
           requires:
             - push-to-ecr
+
 
 # version: 2.1
 
