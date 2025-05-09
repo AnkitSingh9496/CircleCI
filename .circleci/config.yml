@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-      resource_class: large
+    resource_class: virus/windows
 
 jobs:
   build:
@@ -14,17 +14,12 @@ jobs:
       - run:
           name: Build Docker Image
           command: |
-            docker build -t hello-world-express .
+            docker build -t $ECR_REPOSITORY:latest .
 
   push-to-ecr:
     executor: linux-self-hosted
     steps:
       - checkout
-      - run:
-          name: Check AWS CLI and Docker Versions
-          command: |
-            aws --version
-            docker --version
       - run:
           name: Authenticate with ECR
           command: |
@@ -33,6 +28,9 @@ jobs:
           name: Build, Tag, and Push Docker Image to ECR
           command: |
             IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
+            echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
+            source $BASH_ENV
+
             docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
             docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
             docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
@@ -42,24 +40,24 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install kubectl
+          name: Set up kubeconfig
           command: |
-            curl -LO "https://storage.googleapis.com/kubernetes-release/release/v1.24.2/bin/linux/amd64/kubectl"
-            chmod +x kubectl
-            mv kubectl /usr/local/bin/
+            aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME
       - run:
-          name: Update kubeconfig for EKS
+          name: Export IMAGE_TAG for deployment
           command: |
-            aws eks update-kubeconfig --name CircleCI --region $AWS_REGION
+            IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
+            echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
+            source $BASH_ENV
       - run:
-          name: Apply Kubernetes Manifests
+          name: Deploy to EKS
           command: |
-            kubectl apply -f kubernetes/deployment.yaml
-            kubectl apply -f kubernetes/service.yaml
+            envsubst < deployment.yaml | kubectl apply -f -
+            kubectl apply -f service.yaml
 
 workflows:
   version: 2
-  ecr-deploy:
+  deploy-pipeline:
     jobs:
       - build
       - push-to-ecr:
