@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows
+    resource_class: virus/windows  # You may want to change this if you're using Linux.
 
 jobs:
   build:
@@ -46,6 +46,7 @@ jobs:
               VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
               curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
               chmod +x kubectl
+              # Install kubectl into $HOME/bin
               mkdir -p $HOME/bin
               mv kubectl $HOME/bin/kubectl
               echo "export PATH=$HOME/bin:$PATH" >> $BASH_ENV
@@ -65,15 +66,18 @@ jobs:
       - run:
           name: Check Kubernetes manifests exist
           command: |
-            echo "Listing files in the Kubernetes folder"
-            ls -la kubernetes
-            test -f kubernetes/deployment.yaml || (echo "Error: kubernetes/deployment.yaml not found" && exit 1)
-            test -f kubernetes/service.yaml || (echo "Error: kubernetes/service.yaml not found" && exit 1)
+            ls -la
+            test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
+            test -f service.yaml || (echo "Error: service.yaml not found" && exit 1)
       - run:
           name: Deploy to EKS
           command: |
-            envsubst < kubernetes/deployment.yaml | kubectl apply -f -
-            kubectl apply -f kubernetes/service.yaml
+            # Check current user
+            kubectl config current-context
+            kubectl config view
+            kubectl auth can-i get deployments --namespace=default
+            envsubst < deployment.yaml | kubectl apply -f -
+            kubectl apply -f service.yaml
 
 workflows:
   version: 2
