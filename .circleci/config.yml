@@ -34,11 +34,25 @@ jobs:
             docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
             docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
             docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+      - persist_to_workspace:
+          root: .
+          paths:
+            - deployment.yaml
+            - service.yaml
 
   deploy-to-eks:
     executor: linux-self-hosted
     steps:
-      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: Install kubectl (if missing)
+          command: |
+            if ! command -v kubectl &> /dev/null; then
+              curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+              chmod +x kubectl
+              sudo mv kubectl /usr/local/bin/
+            fi
       - run:
           name: Set up kubeconfig
           command: |
