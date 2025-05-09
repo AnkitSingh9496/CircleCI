@@ -1,30 +1,88 @@
 version: 2.1
+
+executors:
+  linux-self-hosted:
+    machine:
+      enabled: true
+    resource_class: virus/windows
+
 jobs:
-  check-k8s-manifests:
-    docker:
-      - image: cimg/base:stable
-    working_directory: ~/project
+  build:
+    executor: linux-self-hosted
     steps:
       - checkout
       - run:
-          name: Debug file location
+          name: Build Docker Image
           command: |
-            pwd
-            ls -l
-            ls -l kubernetes
+            docker build -t $ECR_REPOSITORY:latest .
+
+  push-to-ecr:
+    executor: linux-self-hosted
+    steps:
+      - checkout
+      - run:
+          name: Authenticate with ECR
+          command: |
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+      - run:
+          name: Build, Tag, and Push Docker Image to ECR
+          command: |
+            IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
+            echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
+            source $BASH_ENV
+            docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+            docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+  deploy-to-eks:
+    executor: linux-self-hosted
+    steps:
+      - checkout
+      - run:
+          name: Install kubectl if not available
+          command: |
+            if ! command -v kubectl &> /dev/null; then
+              echo "Installing kubectl..."
+              VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
+              curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
+              chmod +x kubectl
+              mkdir -p $HOME/bin
+              mv kubectl $HOME/bin/kubectl
+              echo "export PATH=$HOME/bin:$PATH" >> $BASH_ENV
+            else
+              echo "kubectl already installed"
+            fi
+      - run:
+          name: Set up kubeconfig
+          command: |
+            aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME
+      - run:
+          name: Export IMAGE_TAG for deployment
+          command: |
+            IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
+            echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
+            source $BASH_ENV
       - run:
           name: Check Kubernetes manifests exist
           command: |
-            if [ ! -f kubernetes/deployment.yaml ]; then
-              echo "Error: kubernetes/deployment.yaml not found"
-              exit 1
-            fi
-            if [ ! -f kubernetes/service.yaml ]; then
-              echo "Error: kubernetes/service.yaml not found"
-              exit 1
-            fi
+            echo "Listing files in the Kubernetes folder"
+            ls -la kubernetes
+            test -f kubernetes/deployment.yaml || (echo "Error: kubernetes/deployment.yaml not found" && exit 1)
+            test -f kubernetes/service.yaml || (echo "Error: kubernetes/service.yaml not found" && exit 1)
+      - run:
+          name: Deploy to EKS
+          command: |
+            envsubst < kubernetes/deployment.yaml | kubectl apply -f -
+            kubectl apply -f kubernetes/service.yaml
+
 workflows:
   version: 2
-  k8s-deploy:
+  deploy-pipeline:
     jobs:
-      - check-k8s-manifests
+      - build
+      - push-to-ecr:
+          requires:
+            - build
+      - deploy-to-eks:
+          requires:
+            - push-to-ecr
