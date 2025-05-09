@@ -3,8 +3,15 @@ jobs:
   check-k8s-manifests:
     docker:
       - image: cimg/base:stable
+    working_directory: ~/project
     steps:
       - checkout
+      - run:
+          name: Debug file location
+          command: |
+            pwd
+            ls -l
+            ls -l kubernetes
       - run:
           name: Check Kubernetes manifests exist
           command: |
