@@ -1,21 +1,79 @@
 version: 2.1
+
+executors:
+  linux-self-hosted:
+    machine:
+      enabled: true
+      resource_class: large
+
 jobs:
-  build-and-push-ecr:
-    docker:
-      - image: cimg/python:3.10
+  build:
+    executor: linux-self-hosted
     steps:
       - checkout
       - run:
-          name: Install AWS CLI
+          name: Build Docker Image
           command: |
-            sudo apt-get update && sudo apt-get install -y awscli
+            docker build -t hello-world-express .
+
+  push-to-ecr:
+    executor: linux-self-hosted
+    steps:
+      - checkout
+      - run:
+          name: Check AWS CLI and Docker Versions
+          command: |
+            aws --version
+            docker --version
+      - run:
+          name: Configure AWS Credentials
+          command: |
+            mkdir -p ~/.aws
+            echo "[default]" > ~/.aws/credentials
+            echo "aws_access_key_id=$AWS_ACCESS_KEY_ID" >> ~/.aws/credentials
+            echo "aws_secret_access_key=$AWS_SECRET_ACCESS_KEY" >> ~/.aws/credentials
+            echo "[default]" > ~/.aws/config
+            echo "region=$AWS_REGION" >> ~/.aws/config
       - run:
           name: Authenticate with ECR
           command: |
             aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-      # ... (other steps remain unchanged)
+      - run:
+          name: Build, Tag, and Push Docker Image to ECR
+          command: |
+            IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
+            docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+            docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+  deploy-to-eks:
+    executor: linux-self-hosted
+    steps:
+      - checkout
+      - run:
+          name: Install kubectl
+          command: |
+            curl -LO "https://storage.googleapis.com/kubernetes-release/release/v1.24.2/bin/linux/amd64/kubectl"
+            chmod +x kubectl
+            mv kubectl /usr/local/bin/
+      - run:
+          name: Update kubeconfig for EKS
+          command: |
+            aws eks update-kubeconfig --name CircleCI --region $AWS_REGION
+      - run:
+          name: Apply Kubernetes Manifests
+          command: |
+            kubectl apply -f kubernetes/deployment.yaml
+            kubectl apply -f kubernetes/service.yaml
+
 workflows:
   version: 2
-  build_and_push:
+  ecr-deploy:
     jobs:
-      - build-and-push-ecr
+      - build
+      - push-to-ecr:
+          requires:
+            - build
+      - deploy-to-eks:
+          requires:
+            - push-to-ecr
