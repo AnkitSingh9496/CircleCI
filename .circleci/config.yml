@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows
+    resource_class: virus/windows  # You may want to change this if you're using Linux.
 
 jobs:
   build:
@@ -15,16 +15,11 @@ jobs:
           name: Build Docker Image
           command: |
             docker build -t $ECR_REPOSITORY:latest .
-      - persist_to_workspace:
-          root: .
-          paths:
-            - .
 
   push-to-ecr:
     executor: linux-self-hosted
     steps:
-      - attach_workspace:
-          at: .
+      - checkout
       - run:
           name: Authenticate with ECR
           command: |
@@ -35,7 +30,6 @@ jobs:
             IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
             echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
             source $BASH_ENV
-
             docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
             docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
             docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
@@ -43,20 +37,19 @@ jobs:
   deploy-to-eks:
     executor: linux-self-hosted
     steps:
-      - attach_workspace:
-          at: .
+      - checkout
       - run:
           name: Install kubectl if not available
           command: |
             if ! command -v kubectl &> /dev/null; then
               echo "Installing kubectl..."
               VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
-              curl -LO "https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl"
+              curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
               chmod +x kubectl
+              # Install kubectl into $HOME/bin
               mkdir -p $HOME/bin
               mv kubectl $HOME/bin/kubectl
-              echo 'export PATH=$HOME/bin:$PATH' >> $BASH_ENV
-              source $BASH_ENV
+              echo "export PATH=$HOME/bin:$PATH" >> $BASH_ENV
             else
               echo "kubectl already installed"
             fi
@@ -73,7 +66,6 @@ jobs:
       - run:
           name: Check Kubernetes manifests exist
           command: |
-            echo "Checking for deployment.yaml and service.yaml in root"
             ls -la
             test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
             test -f service.yaml || (echo "Error: service.yaml not found" && exit 1)
