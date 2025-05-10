@@ -55,7 +55,7 @@ jobs:
           name: Load env + Set up kubeconfig
           command: |
             source $BASH_ENV
-            aws eks --region $AWS_REGION update-kubeconfig --name arn:aws:eks:$AWS_REGION:244706281787:cluster/$EKS_CLUSTER_NAME
+            aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME
       - run:
           name: Export IMAGE_TAG for deployment
           command: |
