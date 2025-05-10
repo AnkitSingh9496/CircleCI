@@ -67,12 +67,8 @@ jobs:
             source $BASH_ENV
             echo "Checking for deployment.yaml and service.yaml in root directory..."
             ls -la
-            if [ ! -f deployment.yaml ]; then
-              echo "Error: deployment.yaml not found in project root." && exit 1
-            fi
-            if [ ! -f service.yaml ]; then
-              echo "Error: service.yaml not found in project root." && exit 1
-            fi
+            test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
+            test -f service.yaml || (echo "Error: service.yaml not found" && exit 1)
       - run:
           name: Deploy to EKS
           command: |
