@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows
+    resource_class: virus/windows 
 
 jobs:
   build:
@@ -51,21 +51,18 @@ jobs:
             else
               echo "kubectl already installed"
             fi
-      # FIX: Remove source $BASH_ENV (not needed, CircleCI sources it automatically)
       - run:
           name: Load env + Set up kubeconfig
+          shell: /bin/bash -eo pipefail
           command: |
-            # Add explicit AWS credentials check
+            # Directly export env vars instead of sourcing $BASH_ENV
             aws sts get-caller-identity
-            # Debug information
             echo "Using AWS Region: $AWS_REGION"
             echo "Using EKS Cluster Name: $EKS_CLUSTER_NAME"
-            # Add explicit error handling
             if ! aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME; then
               echo "Failed to update kubeconfig. Check AWS credentials and EKS cluster name."
               exit 1
             fi
-            # Check if kubeconfig was created correctly
             kubectl config view --minify
       - run:
           name: Export IMAGE_TAG for deployment
@@ -75,6 +72,7 @@ jobs:
       - run:
           name: Check Kubernetes manifests exist
           command: |
+            source $BASH_ENV
             echo "Checking for deployment.yaml and service.yaml in root directory..."
             ls -la
             test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
@@ -82,12 +80,11 @@ jobs:
       - run:
           name: Deploy to EKS
           command: |
-            # Add more debug info
+            source $BASH_ENV
             echo "Current kubectl context:"
             kubectl config current-context
             echo "Verifying cluster connectivity:"
             kubectl get nodes || echo "Failed to connect to cluster nodes!"
-            # Add better error handling for deployment
             echo "Deploying to Kubernetes..."
             if ! envsubst < deployment.yaml | kubectl apply -f -; then
               echo "Failed to apply deployment.yaml"
