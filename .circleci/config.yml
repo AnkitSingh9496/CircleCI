@@ -72,14 +72,29 @@ jobs:
             ls -la
             test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
             test -f service.yaml || (echo "Error: service.yaml not found" && exit 1)
+      # - run:
+      #     name: Deploy to EKS
+      #     command: |
+      #       source $BASH_ENV
+      #       kubectl config current-context
+      #       kubectl auth can-i get deployments --namespace=default
+      #       envsubst < deployment.yaml | kubectl apply -f -
+      #       kubectl apply -f service.yaml
       - run:
-          name: Deploy to EKS
-          command: |
-            source $BASH_ENV
-            kubectl config current-context
-            kubectl auth can-i get deployments --namespace=default
-            envsubst < deployment.yaml | kubectl apply -f -
-            kubectl apply -f service.yaml
+    name: Deploy to EKS
+    command: |
+      source $BASH_ENV
+      if [ -f deployment.yaml ]; then
+        envsubst < deployment.yaml | kubectl apply -f -
+      else
+        echo "deployment.yaml not found"
+      fi
+      if [ -f service.yaml ]; then
+        kubectl apply -f service.yaml
+      else
+        echo "service.yaml not found"
+      fi
+
 
 workflows:
   version: 2
