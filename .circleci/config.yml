@@ -21,24 +21,16 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Check AWS CLI and Docker Versions
-          command: |
-            aws --version
-            docker --version
-      - run:
           name: Authenticate with ECR
           command: |
-            aws ecr get-login-password --region $AWS_REGION | \
-              docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
       - run:
           name: Build, Tag, and Push Docker Image to ECR
           command: |
             IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
-            echo "Using image tag: $IMAGE_TAG"
-
+            echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
             docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
             docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
             docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
   deploy-to-eks:
@@ -63,11 +55,7 @@ jobs:
           name: Load env + Set up kubeconfig
           command: |
             source $BASH_ENV
-            echo "Setting up EKS kubeconfig"
-            echo "AWS Region: $AWS_REGION"
-            echo "EKS Cluster Name: $EKS_CLUSTER_NAME"
-            aws eks --region "$AWS_REGION" update-kubeconfig --name "$EKS_CLUSTER_NAME" || { echo "Failed to update kubeconfig."; exit 1; }
-            kubectl config current-context || { echo "Failed to get current context. Check if kubeconfig was set up correctly."; exit 1; }
+            aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME
       - run:
           name: Export IMAGE_TAG for deployment
           command: |
@@ -84,10 +72,15 @@ jobs:
       - run:
           name: Deploy to EKS
           command: |
+            set -e
             source $BASH_ENV
+            echo "Checking current kubectl context:"
             kubectl config current-context
-            kubectl auth can-i get deployments --namespace=default
+            echo "Checking if we can get deployments:"
+            kubectl auth can-i get deployments --namespace=default || (echo "EKS authentication failed. Check IAM roles and AWS credentials." && exit 1)
+            echo "Deploying deployment.yaml:"
             envsubst < deployment.yaml | kubectl apply -f -
+            echo "Deploying service.yaml:"
             kubectl apply -f service.yaml
 
 workflows:
