@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows  # Rename this if it's misleading
+    resource_class: virus/windows 
 
 jobs:
   build:
@@ -23,7 +23,8 @@ jobs:
       - run:
           name: Authenticate with ECR
           command: |
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region $AWS_REGION | \
+              docker login --username AWS --password-stdin $ECR_REGISTRY
       - run:
           name: Build, Tag, and Push Docker Image to ECR
           command: |
@@ -67,7 +68,7 @@ jobs:
       - run:
           name: Prepare Kubernetes YAML files
           command: |
-            cat > deployment.yaml <<EOF
+            cat > deployment.yaml << 'EOF'
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -89,7 +90,7 @@ spec:
         - containerPort: 3000
 EOF
 
-            cat > service.yaml <<EOF
+            cat > service.yaml << 'EOF'
 apiVersion: v1
 kind: Service
 metadata:
