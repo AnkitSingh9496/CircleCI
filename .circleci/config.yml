@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows 
+    resource_class: virus/windows
 
 jobs:
   build:
@@ -15,7 +15,7 @@ jobs:
           name: Build Docker Image
           command: |
             docker build -t $ECR_REPOSITORY:latest .
-  
+
   push-to-ecr:
     executor: linux-self-hosted
     steps:
@@ -53,17 +53,10 @@ jobs:
             fi
       - run:
           name: Load env + Set up kubeconfig
-          shell: /bin/bash -eo pipefail
+          shell: /bin/bash -leo pipefail
           command: |
-            # Directly export env vars instead of sourcing $BASH_ENV
-            aws sts get-caller-identity
-            echo "Using AWS Region: $AWS_REGION"
-            echo "Using EKS Cluster Name: $EKS_CLUSTER_NAME"
-            if ! aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME; then
-              echo "Failed to update kubeconfig. Check AWS credentials and EKS cluster name."
-              exit 1
-            fi
-            kubectl config view --minify
+            source $BASH_ENV
+            aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME
       - run:
           name: Export IMAGE_TAG for deployment
           command: |
@@ -81,20 +74,10 @@ jobs:
           name: Deploy to EKS
           command: |
             source $BASH_ENV
-            echo "Current kubectl context:"
             kubectl config current-context
-            echo "Verifying cluster connectivity:"
-            kubectl get nodes || echo "Failed to connect to cluster nodes!"
-            echo "Deploying to Kubernetes..."
-            if ! envsubst < deployment.yaml | kubectl apply -f -; then
-              echo "Failed to apply deployment.yaml"
-              exit 1
-            fi
-            if ! kubectl apply -f service.yaml; then
-              echo "Failed to apply service.yaml"
-              exit 1
-            fi
-            echo "Deployment successful!"
+            kubectl auth can-i get deployments --namespace=default
+            envsubst < deployment.yaml | kubectl apply -f -
+            kubectl apply -f service.yaml
 
 workflows:
   version: 2
