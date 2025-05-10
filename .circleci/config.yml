@@ -55,7 +55,7 @@ jobs:
           name: Load env + Set up kubeconfig
           command: |
             source $BASH_ENV
-            aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME
+            aws eks --region $AWS_REGION update-kubeconfig --name arn:aws:eks:$AWS_REGION:244706281787:cluster/$EKS_CLUSTER_NAME
       - run:
           name: Export IMAGE_TAG for deployment
           command: |
@@ -72,15 +72,10 @@ jobs:
       - run:
           name: Deploy to EKS
           command: |
-            set -e
             source $BASH_ENV
-            echo "Checking current kubectl context:"
             kubectl config current-context
-            echo "Checking if we can get deployments:"
-            kubectl auth can-i get deployments --namespace=default || (echo "EKS authentication failed. Check IAM roles and AWS credentials." && exit 1)
-            echo "Deploying deployment.yaml:"
+            kubectl auth can-i get deployments --namespace=default
             envsubst < deployment.yaml | kubectl apply -f -
-            echo "Deploying service.yaml:"
             kubectl apply -f service.yaml
 
 workflows:
