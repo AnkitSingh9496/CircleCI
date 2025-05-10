@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows  # Consider renaming this if you're actually on Linux
+    resource_class: linux-medium
 
 jobs:
   build:
@@ -75,13 +75,9 @@ jobs:
       - run:
           name: Deploy to EKS
           command: |
-            set -e
             source $BASH_ENV
             kubectl config current-context
-            # Add check for EKS authentication
-            echo "Testing AWS EKS authentication and permissions..."
-            aws sts get-caller-identity
-            kubectl auth can-i get deployments --namespace=default || (echo "Kubernetes RBAC: cannot get deployments. Check IAM/OIDC role mapping." && exit 1)
+            kubectl auth can-i get deployments --namespace=default
             envsubst < deployment.yaml | kubectl apply -f -
             kubectl apply -f service.yaml
 
