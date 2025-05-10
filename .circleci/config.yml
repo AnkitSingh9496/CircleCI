@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows  # Consider renaming this if you're actually on Linux
+    resource_class: virus/windows 
 
 jobs:
   build:
