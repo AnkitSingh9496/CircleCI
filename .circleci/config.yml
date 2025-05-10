@@ -16,78 +16,55 @@ jobs:
           command: |
             docker build -t $ECR_REPOSITORY:latest .
 
-  push-to-ecr:
-    executor: linux-self-hosted
-    steps:
-      - checkout
-      - run:
-          name: Authenticate with ECR
-          command: |
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-      - run:
-          name: Build, Tag, and Push Docker Image to ECR
-          command: |
-            IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
-            echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
-            docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
-            docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-            docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
   deploy-to-eks:
-    executor: linux-self-hosted
-    steps:
-      - checkout
-      - run:
-          name: Install kubectl if not available
-          command: |
-            if ! command -v kubectl &> /dev/null; then
-              echo "Installing kubectl..."
-              VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
-              curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
-              chmod +x kubectl
-              mkdir -p $HOME/bin
-              mv kubectl $HOME/bin/kubectl
-              echo 'export PATH=$HOME/bin:$PATH' >> $BASH_ENV
-            else
-              echo "kubectl already installed"
-            fi
+  executor: linux-self-hosted
+  steps:
+    - checkout
+    - run:
+        name: Install kubectl if not available
+        command: |
+          if ! command -v kubectl &> /dev/null; then
+            echo "Installing kubectl..."
+            VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
+            curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
+            chmod +x kubectl
+            mkdir -p $HOME/bin
+            mv kubectl $HOME/bin/kubectl
+            echo 'export PATH=$HOME/bin:$PATH' >> $BASH_ENV
+          else
+            echo "kubectl already installed"
+          fi
+    - run:
+        name: Load env + Set up kubeconfig
+        command: |
+          source $BASH_ENV
+          echo "Setting up EKS kubeconfig"
+          echo "AWS Region: $AWS_REGION"
+          echo "EKS Cluster Name: $EKS_CLUSTER_NAME"
+          aws eks --region "$AWS_REGION" update-kubeconfig --name "$EKS_CLUSTER_NAME" || { echo "Failed to update kubeconfig."; exit 1; }
+          kubectl config current-context || { echo "Failed to get current context. Check if kubeconfig was set up correctly."; exit 1; }
+    - run:
+        name: Export IMAGE_TAG for deployment
+        command: |
+          IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
+          echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
+    - run:
+        name: Check Kubernetes manifests exist
+        command: |
+          source $BASH_ENV
+          echo "Checking for deployment.yaml and service.yaml in root directory..."
+          ls -la
+          test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
+          test -f service.yaml || (echo "Error: service.yaml not found" && exit 1)
+    - run:
+        name: Deploy to EKS
+        command: |
+          source $BASH_ENV
+          kubectl config current-context
+          kubectl auth can-i get deployments --namespace=default
+          envsubst < deployment.yaml | kubectl apply -f -
+          kubectl apply -f service.yaml
 
-      - run:
-          name: Load env + Set up kubeconfig
-          command: |
-            source $BASH_ENV
-            aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME
-
-      - run:
-          name: Export IMAGE_TAG for deployment
-          command: |
-            IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
-            echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
-
-      - run:
-          name: Check Kubernetes manifests exist
-          command: |
-            source $BASH_ENV
-            echo "Checking for deployment.yaml and service.yaml in root directory..."
-            ls -la
-            test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
-            test -f service.yaml || (echo "Error: service.yaml not found" && exit 1)
-
-      - run:
-          name: Deploy to EKS
-          command: |
-            source $BASH_ENV
-            kubectl config current-context
-            kubectl auth can-i get deployments --namespace=default
-            envsubst < deployment.yaml | kubectl apply -f -
-            kubectl apply -f service.yaml
-      - run:
-            name: Load env + Set up kubeconfig
-            command: |
-                  source $BASH_ENV
-                  echo "Updating kubeconfig for cluster: $EKS_CLUSTER_NAME in region: $AWS_REGION"
-                  aws eks --region "$AWS_REGION" update-kubeconfig --name "$EKS_CLUSTER_NAME"
-                  kubectl config current-context || { echo "Failed to get current context. Check if kubeconfig was set up correctly."; exit 1; }
 
 workflows:
   version: 2
