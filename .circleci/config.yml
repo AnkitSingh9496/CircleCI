@@ -81,6 +81,13 @@ jobs:
             kubectl auth can-i get deployments --namespace=default
             envsubst < deployment.yaml | kubectl apply -f -
             kubectl apply -f service.yaml
+      - run:
+            name: Load env + Set up kubeconfig
+            command: |
+                  source $BASH_ENV
+                  echo "Updating kubeconfig for cluster: $EKS_CLUSTER_NAME in region: $AWS_REGION"
+                  aws eks --region "$AWS_REGION" update-kubeconfig --name "$EKS_CLUSTER_NAME"
+                  kubectl config current-context || { echo "Failed to get current context. Check if kubeconfig was set up correctly."; exit 1; }
 
 workflows:
   version: 2
