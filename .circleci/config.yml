@@ -75,9 +75,13 @@ jobs:
       - run:
           name: Deploy to EKS
           command: |
+            set -e
             source $BASH_ENV
             kubectl config current-context
-            kubectl auth can-i get deployments --namespace=default
+            # Add check for EKS authentication
+            echo "Testing AWS EKS authentication and permissions..."
+            aws sts get-caller-identity
+            kubectl auth can-i get deployments --namespace=default || (echo "Kubernetes RBAC: cannot get deployments. Check IAM/OIDC role mapping." && exit 1)
             envsubst < deployment.yaml | kubectl apply -f -
             kubectl apply -f service.yaml
 
