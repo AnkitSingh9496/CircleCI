@@ -65,17 +65,13 @@ jobs:
           name: Check Kubernetes manifests exist
           command: |
             source $BASH_ENV
-            echo "Looking for deployment.yaml and service.yaml in the k8s/ directory..."
-            if [ -f k8s/deployment.yaml ] && [ -f k8s/service.yaml ]; then
-              echo "Found manifests in k8s/ directory. Copying to project root."
-              cp k8s/deployment.yaml ./deployment.yaml
-              cp k8s/service.yaml ./service.yaml
-            fi
+            echo "Checking for deployment.yaml and service.yaml in root directory..."
+            ls -la
             if [ ! -f deployment.yaml ]; then
-              echo "Error: deployment.yaml not found in project root or k8s/ directory." && exit 1
+              echo "Error: deployment.yaml not found in project root." && exit 1
             fi
             if [ ! -f service.yaml ]; then
-              echo "Error: service.yaml not found in project root or k8s/ directory." && exit 1
+              echo "Error: service.yaml not found in project root." && exit 1
             fi
       - run:
           name: Deploy to EKS
