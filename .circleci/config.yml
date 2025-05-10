@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows 
+    resource_class: virus/windows  # Change this to a more appropriate name if not Windows
 
 jobs:
   build:
@@ -23,8 +23,7 @@ jobs:
       - run:
           name: Authenticate with ECR
           command: |
-            aws ecr get-login-password --region $AWS_REGION | \
-              docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
       - run:
           name: Build, Tag, and Push Docker Image to ECR
           command: |
@@ -38,14 +37,14 @@ jobs:
     executor: linux-self-hosted
     steps:
       - run:
-          name: Clean any existing files before checkout
+          name: Clean workspace
           command: |
             rm -rf ~/project/* || true
             rm -rf ~/project/.* || true
       - checkout:
           path: ~/project
       - run:
-          name: Install kubectl if not present
+          name: Install kubectl if missing
           command: |
             if ! command -v kubectl &> /dev/null; then
               VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
@@ -66,9 +65,9 @@ jobs:
             IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
             echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
       - run:
-          name: Prepare Kubernetes YAML files
+          name: Create Kubernetes YAML files
           command: |
-            cat > deployment.yaml << 'EOF'
+            cat << 'EOF' > deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -90,7 +89,7 @@ spec:
         - containerPort: 3000
 EOF
 
-            cat > service.yaml << 'EOF'
+            cat << 'EOF' > service.yaml
 apiVersion: v1
 kind: Service
 metadata:
@@ -102,8 +101,7 @@ spec:
     targetPort: 3000
   selector:
     app: nodejs-app
-EOF
-      - run:
+EOF - run:
           name: Deploy to EKS
           command: |
             source $BASH_ENV
