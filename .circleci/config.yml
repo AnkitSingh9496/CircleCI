@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows  # You may want to change this if you're using Linux.
+    resource_class: virus/windows
 
 jobs:
   build:
@@ -21,17 +21,24 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Check AWS CLI and Docker Versions
+          command: |
+            aws --version
+            docker --version
+      - run:
           name: Authenticate with ECR
           command: |
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region $AWS_REGION | \
+              docker login --username AWS --password-stdin $ECR_REGISTRY
       - run:
           name: Build, Tag, and Push Docker Image to ECR
           command: |
             IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
-            echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
-            source $BASH_ENV
+            echo "Using image tag: $IMAGE_TAG"
+
             docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
             docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
             docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
   deploy-to-eks:
@@ -46,35 +53,39 @@ jobs:
               VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
               curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
               chmod +x kubectl
-              # Install kubectl into $HOME/bin
               mkdir -p $HOME/bin
               mv kubectl $HOME/bin/kubectl
-              echo "export PATH=$HOME/bin:$PATH" >> $BASH_ENV
+              echo 'export PATH=$HOME/bin:$PATH' >> $BASH_ENV
             else
               echo "kubectl already installed"
             fi
       - run:
-          name: Set up kubeconfig
+          name: Load env + Set up kubeconfig
           command: |
-            aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME
+            source $BASH_ENV
+            echo "Setting up EKS kubeconfig"
+            echo "AWS Region: $AWS_REGION"
+            echo "EKS Cluster Name: $EKS_CLUSTER_NAME"
+            aws eks --region "$AWS_REGION" update-kubeconfig --name "$EKS_CLUSTER_NAME" || { echo "Failed to update kubeconfig."; exit 1; }
+            kubectl config current-context || { echo "Failed to get current context. Check if kubeconfig was set up correctly."; exit 1; }
       - run:
           name: Export IMAGE_TAG for deployment
           command: |
             IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
             echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
-            source $BASH_ENV
       - run:
           name: Check Kubernetes manifests exist
           command: |
+            source $BASH_ENV
+            echo "Checking for deployment.yaml and service.yaml in root directory..."
             ls -la
             test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
             test -f service.yaml || (echo "Error: service.yaml not found" && exit 1)
       - run:
           name: Deploy to EKS
           command: |
-            # Check current user
+            source $BASH_ENV
             kubectl config current-context
-            kubectl config view
             kubectl auth can-i get deployments --namespace=default
             envsubst < deployment.yaml | kubectl apply -f -
             kubectl apply -f service.yaml
