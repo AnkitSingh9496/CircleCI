@@ -1,11 +1,9 @@
 version: 2.1
-
 executors:
   linux-self-hosted:
     machine:
       enabled: true
     resource_class: virus/windows
-
 jobs:
   build:
     executor: linux-self-hosted
@@ -15,7 +13,6 @@ jobs:
           name: Build Docker Image
           command: |
             docker build -t $ECR_REPOSITORY:latest .
-
   push-to-ecr:
     executor: linux-self-hosted
     steps:
@@ -32,7 +29,6 @@ jobs:
             docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
             docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
             docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
   deploy-to-eks:
     executor: linux-self-hosted
     steps:
@@ -61,23 +57,49 @@ jobs:
             IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
             echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
       - run:
-          name: Check Kubernetes manifests exist
+          name: Debug file locations
           command: |
-            echo "Checking for deployment.yaml and service.yaml in root directory..."
+            echo "Current directory:"
+            pwd
+            echo "Directory contents:"
             ls -la
-            find . -name 'deployment.yaml' -print
-            find . -name 'service.yaml' -print
-            test -f ./deployment.yaml || (echo "Error: deployment.yaml not found in root, searching subdirectories..." && exit 1)
-            test -f ./service.yaml || (echo "Error: service.yaml not found in root, searching subdirectories..." && exit 1)
+            echo "Finding all yaml files in repository:"
+            find . -name "*.yaml" -o -name "*.yml"
       - run:
           name: Deploy to EKS
           command: |
             source $BASH_ENV
+            echo "Using these Kubernetes manifest files:"
+            if [ -f "./deployment.yaml" ]; then
+              echo "Found deployment.yaml"
+            else
+              echo "WARNING: deployment.yaml not found in current directory"
+              DEPLOY_FILE=$(find . -name "deployment.yaml" | head -n 1)
+              if [ -n "$DEPLOY_FILE" ]; then
+                echo "Using $DEPLOY_FILE instead"
+                cp $DEPLOY_FILE ./deployment.yaml
+              else
+                echo "Error: No deployment.yaml found in repository!"
+                exit 1
+              fi
+            fi
+            if [ -f "./service.yaml" ]; then
+              echo "Found service.yaml"
+            else
+              echo "WARNING: service.yaml not found in current directory"
+              SERVICE_FILE=$(find . -name "service.yaml" | head -n 1)
+              if [ -n "$SERVICE_FILE" ]; then
+                echo "Using $SERVICE_FILE instead"
+                cp $SERVICE_FILE ./service.yaml
+              else
+                echo "Error: No service.yaml found in repository!"
+                exit 1
+              fi
+            fi
             kubectl config current-context
             kubectl auth can-i get deployments --namespace=default
             envsubst < deployment.yaml | kubectl apply -f -
             kubectl apply -f service.yaml
-
 workflows:
   version: 2
   deploy-pipeline:
