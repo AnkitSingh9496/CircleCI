@@ -63,11 +63,12 @@ jobs:
       - run:
           name: Check Kubernetes manifests exist
           command: |
-            source $BASH_ENV
             echo "Checking for deployment.yaml and service.yaml in root directory..."
             ls -la
-            test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
-            test -f service.yaml || (echo "Error: service.yaml not found" && exit 1)
+            find . -name 'deployment.yaml' -print
+            find . -name 'service.yaml' -print
+            test -f ./deployment.yaml || (echo "Error: deployment.yaml not found in root, searching subdirectories..." && exit 1)
+            test -f ./service.yaml || (echo "Error: service.yaml not found in root, searching subdirectories..." && exit 1)
       - run:
           name: Deploy to EKS
           command: |
