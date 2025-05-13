@@ -65,7 +65,11 @@ jobs:
           name: Load env + Set up kubeconfig with IAM role
           shell: /bin/bash -leo pipefail
           command: |
-            source $BASH_ENV
+            BASH_ENV="${HOME}/.bash_env"
+            mkdir -p "$(dirname "$BASH_ENV")"
+            touch "$BASH_ENV"
+            source "$BASH_ENV"
+
             echo "Verifying AWS credentials..."
             aws sts get-caller-identity
 
@@ -102,6 +106,7 @@ jobs:
           shell: /bin/bash -leo pipefail
           command: |
             source $BASH_ENV
+
             DEPLOY_FILE=$(find . -name "deployment.yaml" | head -1)
             SERVICE_FILE=$(find . -name "service.yaml" | head -1)
 
@@ -129,7 +134,7 @@ jobs:
               }
             fi
 
-            echo "Deploying resources..."
+            echo "Deploying to EKS..."
             kubectl apply -f deployment_with_tag.yaml --v=5
             kubectl apply -f "$SERVICE_FILE" --v=5
 
