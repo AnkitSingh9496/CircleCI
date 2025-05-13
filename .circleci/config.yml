@@ -4,7 +4,7 @@ executors:
   linux-self-hosted:
     machine:
       enabled: true
-    resource_class: virus/windows
+      resource_class: virus/windows
 
 jobs:
   build:
@@ -38,54 +38,105 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install kubectl if not available
+          name: Install kubectl and aws-iam-authenticator if not available
+          shell: /bin/bash -leo pipefail
           command: |
             if ! command -v kubectl &> /dev/null; then
               echo "Installing kubectl..."
               VERSION=$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
-              curl -LO https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl
+              curl -LO "https://dl.k8s.io/release/${VERSION}/bin/linux/amd64/kubectl"
               chmod +x kubectl
               mkdir -p $HOME/bin
-              mv kubectl $HOME/bin/kubectl
+              mv kubectl $HOME/bin/
               echo 'export PATH=$HOME/bin:$PATH' >> $BASH_ENV
-            else
-              echo "kubectl already installed"
             fi
+
+            if ! command -v aws-iam-authenticator &> /dev/null; then
+              echo "Installing aws-iam-authenticator..."
+              curl -Lo aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.5.9/aws-iam-authenticator_0.5.9_linux_amd64
+              chmod +x ./aws-iam-authenticator
+              mkdir -p $HOME/bin
+              mv ./aws-iam-authenticator $HOME/bin/
+              echo 'export PATH=$HOME/bin:$PATH' >> $BASH_ENV
+            fi
+
       - run:
-          name: Load env + Set up kubeconfig
+          name: Load env + Set up kubeconfig with IAM role
           shell: /bin/bash -leo pipefail
+          environment:
+            BASH_ENV: ~/.bash_env
           command: |
-            if [ -f "$BASH_ENV" ]; then
-              source $BASH_ENV
+            # Create a persistent bash env file if it doesn't exist
+            if [ ! -f "$BASH_ENV" ]; then
+              touch "$BASH_ENV"
             fi
-            aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME
+            source "$BASH_ENV"
+            echo "Verifying AWS credentials..."
+            aws sts get-caller-identity
+
+            echo "Updating kubeconfig for EKS cluster: $EKS_CLUSTER_NAME"
+            if [ ! -z "$AWS_ROLE_ARN" ]; then
+              aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME --role-arn $AWS_ROLE_ARN
+            else
+              aws eks --region $AWS_REGION update-kubeconfig --name $EKS_CLUSTER_NAME
+            fi
+
+            echo "Verifying kubectl config..."
+            kubectl config view
+            kubectl cluster-info
+            kubectl config get-contexts
+
       - run:
           name: Export IMAGE_TAG for deployment
           command: |
             IMAGE_TAG="v1.0.${CIRCLE_BUILD_NUM}"
             echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
+
       - run:
-          name: Check Kubernetes manifests exist
+          name: Debug file paths
+          shell: /bin/bash -leo pipefail
           command: |
             source $BASH_ENV
-            echo "Checking for deployment.yaml and service.yaml in root directory..."
+            echo "Current working directory: $(pwd)"
+            echo "Listing files:"
             ls -la
-            test -f deployment.yaml || (echo "Error: deployment.yaml not found" && exit 1)
-            test -f service.yaml || (echo "Error: service.yaml not found" && exit 1)
+            find . -name "deployment.yaml" -o -name "service.yaml"
+
       - run:
           name: Deploy to EKS
+          shell: /bin/bash -leo pipefail
           command: |
             source $BASH_ENV
-            if [ -f deployment.yaml ]; then
-              envsubst < deployment.yaml | kubectl apply -f -
-            else
-              echo "deployment.yaml not found"
+            DEPLOY_FILE=$(find . -name "deployment.yaml" | head -1)
+            SERVICE_FILE=$(find . -name "service.yaml" | head -1)
+
+            if [ -z "$DEPLOY_FILE" ]; then
+              echo "ERROR: deployment.yaml not found"
+              exit 1
             fi
-            if [ -f service.yaml ]; then
-              kubectl apply -f service.yaml
-            else
-              echo "service.yaml not found"
+            if [ -z "$SERVICE_FILE" ]; then
+              echo "ERROR: service.yaml not found"
+              exit 1
             fi
+
+            echo "Using deployment file: $DEPLOY_FILE"
+            echo "Using service file: $SERVICE_FILE"
+
+            cat "$DEPLOY_FILE" | sed "s|\${IMAGE_TAG}|$IMAGE_TAG|g" > deployment_with_tag.yaml
+
+            echo "Testing Kubernetes authentication..."
+            if ! kubectl auth can-i get deployments --namespace=default; then
+              echo "ERROR: Kubernetes authentication failed"
+              echo "Attempting to use aws-iam-authenticator token..."
+              aws-iam-authenticator token -i $EKS_CLUSTER_NAME --region $AWS_REGION || {
+                echo "aws-iam-authenticator fallback failed"
+                exit 1
+              }
+            fi
+
+            echo "Deploying resources..."
+            kubectl apply -f deployment_with_tag.yaml --v=5
+            kubectl apply -f "$SERVICE_FILE" --v=5
 
 workflows:
   version: 2
